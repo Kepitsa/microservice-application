@@ -1,0 +1,27 @@
+{
+  "warning_message": {
+    "sounds": [
+      {
+        "name": "codezero:warning_message",
+        "stream": false,
+        "volume": 1.0,
+        "pitch": 1.0,
+        "weight": 1,
+        "attenuation_distance": 16
+      }
+    ]
+  },
+  "judgment_night": {
+    "sounds": [
+      {
+        "name": "codezero:judgment_night",
+        "stream": true,
+        "volume": 0.7,
+        "pitch": 1.0,
+        "weight": 1,
+        "attenuation_distance": 0
+
+      }
+    ]
+  }
+}
