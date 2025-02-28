@@ -114,8 +114,6 @@ services:
     depends_on:
       - payment-db
       - order-service
-      - cart-service
-      - catalog-service
 
   delivery-service:
     build:

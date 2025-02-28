@@ -2,12 +2,6 @@ package com.example.orderservice.controller;
 
 import com.example.orderservice.model.Order;
 import com.example.orderservice.repository.OrderRepository;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -29,17 +23,8 @@ public class OrderController {
         this.orderRepository = orderRepository;
         this.restTemplate = restTemplate;
     }
-
     @PutMapping("/{orderId}")
-    @Operation(summary = "Обновить заказ", description = "Обновляет статус существующего заказа по его идентификатору.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Заказ успешно обновлён",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = Order.class))),
-            @ApiResponse(responseCode = "404", description = "Заказ с указанным ID не найден")
-    })
-    public ResponseEntity<Order> updateOrder(
-            @Parameter(description = "Идентификатор заказа", required = true) @PathVariable Long orderId,
-            @Parameter(description = "Обновлённые данные заказа (только статус используется)", required = true) @RequestBody Order updatedOrder) {
+    public ResponseEntity<Order> updateOrder(@PathVariable Long orderId, @RequestBody Order updatedOrder) {
         return orderRepository.findById(orderId)
                 .map(order -> {
                     order.setStatus(updatedOrder.getStatus());
@@ -48,25 +33,17 @@ public class OrderController {
                 })
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
-
     // Создать заказ
     @PostMapping("/{userId}")
-    @Operation(summary = "Создать новый заказ", description = "Создаёт заказ для пользователя на основе текущей корзины. Проверяет наличие товаров на складе.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Заказ успешно создан",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = Order.class))),
-            @ApiResponse(responseCode = "400", description = "Корзина пуста, общая стоимость <= 0 или недостаточно товара на складе")
-    })
-    public ResponseEntity<Order> createOrder(
-            @Parameter(description = "Идентификатор пользователя", required = true) @PathVariable Long userId) {
-        String cartTotalUrl = "http://cart-service:8081/cart/" + userId + "/total";
+    public ResponseEntity<Order> createOrder(@PathVariable Long userId) {
+        String cartTotalUrl = "http://localhost:8081/cart/" + userId + "/total";
         BigDecimal total = restTemplate.getForObject(cartTotalUrl, BigDecimal.class);
 
         if (total.compareTo(BigDecimal.ZERO) <= 0) {
             return ResponseEntity.badRequest().build();
         }
 
-        String cartItemsUrl = "http://cart-service:8081/cart/" + userId + "/items";
+        String cartItemsUrl = "http://localhost:8081/cart/" + userId + "/items";
         CartItem[] items = restTemplate.getForObject(cartItemsUrl, CartItem[].class);
 
         if (items.length == 0) {
@@ -74,7 +51,7 @@ public class OrderController {
         }
 
         for (CartItem item : items) {
-            String productUrl = "http://catalog-service:8080/products/" + item.getProductId();
+            String productUrl = "http://localhost:8080/products/" + item.getProductId();
             Product product = restTemplate.getForObject(productUrl, Product.class);
             if (product.getStock() < item.getQuantity()) {
                 System.out.println("Недостаточно товара " + item.getProductId() + " на складе");
@@ -91,21 +68,14 @@ public class OrderController {
 
     // Получить заказ с деталями
     @GetMapping("/{orderId}")
-    @Operation(summary = "Получить детали заказа", description = "Возвращает информацию о заказе, включая список товаров, по его идентификатору.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Детали заказа успешно получены",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = OrderDetails.class))),
-            @ApiResponse(responseCode = "404", description = "Заказ с указанным ID не найден")
-    })
-    public ResponseEntity<OrderDetails> getOrderStatus(
-            @Parameter(description = "Идентификатор заказа", required = true) @PathVariable Long orderId) {
+    public ResponseEntity<OrderDetails> getOrderStatus(@PathVariable Long orderId) {
         return orderRepository.findById(orderId)
                 .map(order -> {
                     OrderDetails details = new OrderDetails(order);
-                    String cartItemsUrl = "http://cart-service:8081/cart/" + order.getUserId() + "/items";
+                    String cartItemsUrl = "http://localhost:8081/cart/" + order.getUserId() + "/items";
                     CartItem[] items = restTemplate.getForObject(cartItemsUrl, CartItem[].class);
                     for (CartItem item : items) {
-                        String productUrl = "http://catalog-service:8080/products/" + item.getProductId();
+                        String productUrl = "http://localhost:8080/products/" + item.getProductId();
                         Product product = restTemplate.getForObject(productUrl, Product.class);
                         details.addItem(new OrderItem(item.getProductId(), product.getName(), item.getQuantity()));
                     }
@@ -116,13 +86,7 @@ public class OrderController {
 
     // Получить все заказы
     @GetMapping("/user/{userId}")
-    @Operation(summary = "Получить все заказы пользователя", description = "Возвращает список всех заказов, связанных с указанным пользователем.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Список заказов успешно получен",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = Order.class)))
-    })
-    public ResponseEntity<List<Order>> getOrdersByUser(
-            @Parameter(description = "Идентификатор пользователя", required = true) @PathVariable Long userId) {
+    public ResponseEntity<List<Order>> getOrdersByUser(@PathVariable Long userId) {
         List<Order> orders = orderRepository.findAll().stream()
                 .filter(order -> order.getUserId().equals(userId))
                 .toList();
@@ -131,15 +95,7 @@ public class OrderController {
 
     // Отменить заказ
     @DeleteMapping("/{orderId}")
-    @Operation(summary = "Отменить заказ", description = "Отменяет заказ, возвращает товары на склад и уведомляет платёжный сервис, если заказ был оплачен.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Заказ успешно отменён",
-                    content = @Content(mediaType = "text/plain", schema = @Schema(implementation = String.class))),
-            @ApiResponse(responseCode = "400", description = "Нельзя отменить заказ в статусе DELIVERED или другом неподходящем статусе"),
-            @ApiResponse(responseCode = "404", description = "Заказ с указанным ID не найден")
-    })
-    public ResponseEntity<String> cancelOrder(
-            @Parameter(description = "Идентификатор заказа", required = true) @PathVariable Long orderId) {
+    public ResponseEntity<String> cancelOrder(@PathVariable Long orderId) {
         return orderRepository.findById(orderId)
                 .map(order -> {
                     if ("CREATED".equals(order.getStatus()) || "PAID".equals(order.getStatus())) {
@@ -147,16 +103,16 @@ public class OrderController {
                         orderRepository.save(order);
 
                         // Возвращаем stock для всех товаров в корзине
-                        String cartItemsUrl = "http://cart-service:8081/cart/" + order.getUserId() + "/items";
+                        String cartItemsUrl = "http://localhost:8081/cart/" + order.getUserId() + "/items";
                         CartItem[] items = restTemplate.getForObject(cartItemsUrl, CartItem[].class);
                         for (CartItem item : items) {
-                            String stockUpdateUrl = "http://catalog-service:8080/products/" + item.getProductId() + "/stock";
+                            String stockUpdateUrl = "http://localhost:8080/products/" + item.getProductId() + "/stock";
                             StockUpdateRequest request = new StockUpdateRequest(-item.getQuantity());
                             restTemplate.put(stockUpdateUrl, request);
                         }
 
                         // Уведомляем PaymentService об отмене
-                        String paymentUpdateUrl = "http://payment-service:8083/payments/order/" + orderId + "/cancel";
+                        String paymentUpdateUrl = "http://localhost:8083/payments/order/" + orderId + "/cancel";
                         restTemplate.put(paymentUpdateUrl, null);
 
                         System.out.println("Заказ #" + orderId + " отменён");
@@ -185,17 +141,49 @@ public class OrderController {
             this.items = new ArrayList<>();
         }
 
-        public void addItem(OrderItem item) { this.items.add(item); }
-        public Long getId() { return id; }
-        public void setId(Long id) { this.id = id; }
-        public Long getUserId() { return userId; }
-        public void setUserId(Long userId) { this.userId = userId; }
-        public BigDecimal getTotal() { return total; }
-        public void setTotal(BigDecimal total) { this.total = total; }
-        public String getStatus() { return status; }
-        public void setStatus(String status) { this.status = status; }
-        public List<OrderItem> getItems() { return items; }
-        public void setItems(List<OrderItem> items) { this.items = items; }
+        public void addItem(OrderItem item) {
+            this.items.add(item);
+        }
+
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+
+        public Long getUserId() {
+            return userId;
+        }
+
+        public void setUserId(Long userId) {
+            this.userId = userId;
+        }
+
+        public BigDecimal getTotal() {
+            return total;
+        }
+
+        public void setTotal(BigDecimal total) {
+            this.total = total;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public void setStatus(String status) {
+            this.status = status;
+        }
+
+        public List<OrderItem> getItems() {
+            return items;
+        }
+
+        public void setItems(List<OrderItem> items) {
+            this.items = items;
+        }
     }
 
     static class OrderItem {
@@ -209,12 +197,29 @@ public class OrderController {
             this.quantity = quantity;
         }
 
-        public Long getProductId() { return productId; }
-        public void setProductId(Long productId) { this.productId = productId; }
-        public String getProductName() { return productName; }
-        public void setProductName(String productName) { this.productName = productName; }
-        public int getQuantity() { return quantity; }
-        public void setQuantity(int quantity) { this.quantity = quantity; }
+        public Long getProductId() {
+            return productId;
+        }
+
+        public void setProductId(Long productId) {
+            this.productId = productId;
+        }
+
+        public String getProductName() {
+            return productName;
+        }
+
+        public void setProductName(String productName) {
+            this.productName = productName;
+        }
+
+        public int getQuantity() {
+            return quantity;
+        }
+
+        public void setQuantity(int quantity) {
+            this.quantity = quantity;
+        }
     }
 
     static class CartItem {
@@ -223,14 +228,37 @@ public class OrderController {
         private Long productId;
         private int quantity;
 
-        public Long getId() { return id; }
-        public void setId(Long id) { this.id = id; }
-        public Long getCartId() { return cartId; }
-        public void setCartId(Long cartId) { this.cartId = cartId; }
-        public Long getProductId() { return productId; }
-        public void setProductId(Long productId) { this.productId = productId; }
-        public int getQuantity() { return quantity; }
-        public void setQuantity(int quantity) { this.quantity = quantity; }
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+
+        public Long getCartId() {
+            return cartId;
+        }
+
+        public void setCartId(Long cartId) {
+            this.cartId = cartId;
+        }
+
+        public Long getProductId() {
+            return productId;
+        }
+
+        public void setProductId(Long productId) {
+            this.productId = productId;
+        }
+
+        public int getQuantity() {
+            return quantity;
+        }
+
+        public void setQuantity(int quantity) {
+            this.quantity = quantity;
+        }
     }
 
     static class Product {
@@ -240,24 +268,63 @@ public class OrderController {
         private BigDecimal price;
         private int stock;
 
-        public Long getId() { return id; }
-        public void setId(Long id) { this.id = id; }
-        public String getName() { return name; }
-        public void setName(String name) { this.name = name; }
-        public String getDescription() { return description; }
-        public void setDescription(String description) { this.description = description; }
-        public BigDecimal getPrice() { return price; }
-        public void setPrice(BigDecimal price) { this.price = price; }
-        public int getStock() { return stock; }
-        public void setStock(int stock) { this.stock = stock; }
+        public Long getId() {
+            return id;
+        }
+
+        public void setId(Long id) {
+            this.id = id;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public void setName(String name) {
+            this.name = name;
+        }
+
+        public String getDescription() {
+            return description;
+        }
+
+        public void setDescription(String description) {
+            this.description = description;
+        }
+
+        public BigDecimal getPrice() {
+            return price;
+        }
+
+        public void setPrice(BigDecimal price) {
+            this.price = price;
+        }
+
+        public int getStock() {
+            return stock;
+        }
+
+        public void setStock(int stock) {
+            this.stock = stock;
+        }
     }
 
     static class StockUpdateRequest {
         private int quantity;
 
-        public StockUpdateRequest() {}
-        public StockUpdateRequest(int quantity) { this.quantity = quantity; }
-        public int getQuantity() { return quantity; }
-        public void setQuantity(int quantity) { this.quantity = quantity; }
+        public StockUpdateRequest() {
+        }
+
+        public StockUpdateRequest(int quantity) {
+            this.quantity = quantity;
+        }
+
+        public int getQuantity() {
+            return quantity;
+        }
+
+        public void setQuantity(int quantity) {
+            this.quantity = quantity;
+        }
     }
 }

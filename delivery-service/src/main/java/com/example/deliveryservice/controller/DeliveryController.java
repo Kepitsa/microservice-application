@@ -2,12 +2,6 @@ package com.example.deliveryservice.controller;
 
 import com.example.deliveryservice.model.Delivery;
 import com.example.deliveryservice.repository.DeliveryRepository;
-import io.swagger.v3.oas.annotations.Operation;
-import io.swagger.v3.oas.annotations.Parameter;
-import io.swagger.v3.oas.annotations.media.Content;
-import io.swagger.v3.oas.annotations.media.Schema;
-import io.swagger.v3.oas.annotations.responses.ApiResponse;
-import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
@@ -30,16 +24,8 @@ public class DeliveryController {
     }
 
     @PostMapping("/{orderId}")
-    @Operation(summary = "Создать доставку", description = "Создаёт новую доставку для оплаченного заказа с указанием службы доставки.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Доставка успешно создана",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = Delivery.class))),
-            @ApiResponse(responseCode = "400", description = "Заказ не оплачен (статус не PAID)")
-    })
-    public ResponseEntity<Delivery> createDelivery(
-            @Parameter(description = "Идентификатор заказа", required = true) @PathVariable Long orderId,
-            @Parameter(description = "Данные о службе доставки", required = true) @RequestBody DeliveryRequest request) {
-        String orderUrl = "http://order-service:8082/orders/" + orderId; // Обновлено для Docker
+    public ResponseEntity<Delivery> createDelivery(@PathVariable Long orderId, @RequestBody DeliveryRequest request) {
+        String orderUrl = "http://localhost:8082/orders/" + orderId;
         Order order = restTemplate.getForObject(orderUrl, Order.class);
 
         if (!"PAID".equals(order.getStatus())) {
@@ -53,29 +39,14 @@ public class DeliveryController {
     }
 
     @GetMapping("/{deliveryId}")
-    @Operation(summary = "Отследить доставку", description = "Возвращает текущий статус и данные доставки по её идентификатору.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Информация о доставке получена",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = Delivery.class))),
-            @ApiResponse(responseCode = "404", description = "Доставка с указанным ID не найдена")
-    })
-    public ResponseEntity<Delivery> trackDelivery(
-            @Parameter(description = "Идентификатор доставки", required = true) @PathVariable Long deliveryId) {
+    public ResponseEntity<Delivery> trackDelivery(@PathVariable Long deliveryId) {
         return deliveryRepository.findById(deliveryId)
                 .map(ResponseEntity::ok)
                 .orElseGet(() -> ResponseEntity.notFound().build());
     }
 
     @PutMapping("/{deliveryId}/status")
-    @Operation(summary = "Обновить статус доставки", description = "Изменяет статус доставки. Если статус становится DELIVERED, обновляет статус соответствующего заказа.")
-    @ApiResponses(value = {
-            @ApiResponse(responseCode = "200", description = "Статус доставки успешно обновлён",
-                    content = @Content(mediaType = "application/json", schema = @Schema(implementation = Delivery.class))),
-            @ApiResponse(responseCode = "404", description = "Доставка с указанным ID не найдена")
-    })
-    public ResponseEntity<Delivery> updateDeliveryStatus(
-            @Parameter(description = "Идентификатор доставки", required = true) @PathVariable Long deliveryId,
-            @Parameter(description = "Новый статус доставки (например, PENDING, IN_TRANSIT, DELIVERED)", required = true) @RequestBody StatusUpdateRequest request) {
+    public ResponseEntity<Delivery> updateDeliveryStatus(@PathVariable Long deliveryId, @RequestBody StatusUpdateRequest request) {
         Optional<Delivery> deliveryOpt = deliveryRepository.findById(deliveryId);
         if (deliveryOpt.isEmpty()) {
             return ResponseEntity.notFound().build();
@@ -86,7 +57,7 @@ public class DeliveryController {
 
         // Обновление статуса заказа, если доставка завершена
         if ("DELIVERED".equals(request.getStatus())) {
-            String orderUrl = "http://order-service:8082/orders/" + delivery.getOrderId(); // Обновлено для Docker
+            String orderUrl = "http://localhost:8082/orders/" + delivery.getOrderId();
             Order order = restTemplate.getForObject(orderUrl, Order.class);
             order.setStatus("DELIVERED");
             restTemplate.put(orderUrl, order);
